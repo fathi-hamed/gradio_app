@@ -1,153 +1,85 @@
-# import gradio as gr
-# import cv2
-# import numpy as np
-# from sklearn.cluster import MeanShift, estimate_bandwidth, KMeans
-
-# # MeanShift segmentation function
-# def meanshift_segmentation(image):
-#     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-#     image_filtered = cv2.medianBlur(image_rgb, 5)
-#     flat_image = image_filtered.reshape((-1, 3))
-    
-#     bandwidth = estimate_bandwidth(flat_image, quantile=0.2, n_samples=500)
-#     ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
-#     ms.fit(flat_image)
-    
-#     labels = ms.labels_
-#     cluster_centers = ms.cluster_centers_
-#     segmented_image = cluster_centers[labels].reshape(image_filtered.shape).astype(np.uint8)
-    
-#     return segmented_image
-
-# # KMeans segmentation function
-# def kmeans_segmentation(image, n_clusters=2):
-#     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-#     image_filtered = cv2.medianBlur(image_rgb, 5)
-#     flat_image = image_filtered.reshape((-1, 3))
-    
-#     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-#     kmeans.fit(flat_image)
-    
-#     labels = kmeans.labels_
-#     cluster_centers = kmeans.cluster_centers_
-#     segmented_image = cluster_centers[labels].reshape(image_filtered.shape).astype(np.uint8)
-    
-#     return segmented_image
-
-# # Wrapper function for the Gradio interface
-# def segment_image(image, method):
-#     if method == "MeanShift":
-#         return meanshift_segmentation(image)
-#     elif method == "KMeans":
-#         return kmeans_segmentation(image)
-
-# # Gradio interface
-# interface = gr.Interface(
-#     fn=segment_image, 
-#     inputs=[
-#         gr.Image(type="numpy", label="Upload an Image"),  # Image input
-#         gr.Radio(choices=["MeanShift", "KMeans"], label="Segmentation Method")  # Segmentation method selection
-#     ],
-#     outputs=gr.Image(type="numpy", label="Segmented Image"),  # Output segmented image
-#     title="Image Segmentation App",
-#     description="Upload an image and choose a segmentation method to segment the image."
-# )
-
-# # Launch the app
-# interface.launch()
-
-
-
-import gradio as gr
-import cv2
+import streamlit as st
+import os
 import numpy as np
-from sklearn.cluster import MeanShift, estimate_bandwidth, KMeans
-from skimage.restoration import denoise_nl_means, estimate_sigma
-from skimage.util import random_noise
-from skimage.metrics import peak_signal_noise_ratio as psnr
+from functions import meanshift_segmentation, kmeans_segmentation, add_noise, otsu_segmentation, threshold_segmentation, unet
+from PIL import Image
+import cv2
 
-# MeanShift segmentation function
-def meanshift_segmentation(image):
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image_filtered = cv2.medianBlur(image_rgb, 5)
-    flat_image = image_filtered.reshape((-1, 3))
-    
-    bandwidth = estimate_bandwidth(flat_image, quantile=0.2, n_samples=500)
-    ms = MeanShift(bandwidth=bandwidth, bin_seeding=True)
-    ms.fit(flat_image)
-    
-    labels = ms.labels_
-    cluster_centers = ms.cluster_centers_
-    segmented_image = cluster_centers[labels].reshape(image_filtered.shape).astype(np.uint8)
-    
-    return segmented_image
+# Interface utilisateur
+if not os.path.exists("temp"):
+    os.makedirs("temp")
 
-# KMeans segmentation function
-def kmeans_segmentation(image, n_clusters=2):
-    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image_filtered = cv2.medianBlur(image_rgb, 5)
-    flat_image = image_filtered.reshape((-1, 3))
-    
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    kmeans.fit(flat_image)
-    
-    labels = kmeans.labels_
-    cluster_centers = kmeans.cluster_centers_
-    segmented_image = cluster_centers[labels].reshape(image_filtered.shape).astype(np.uint8)
-    
-    return segmented_image
+def main():
+    st.title("Application de Segmentation d'Image 🖼️")
 
-# Denoising functions
-def add_noise(image, noise_type="gaussian"):
-    if noise_type == "gaussian":
-        noisy_image = random_noise(image, mode='gaussian', var=0.01)
-    elif noise_type == "salt_and_pepper":
-        noisy_image = random_noise(image, mode='s&p', salt_vs_pepper=0.5)
-    return np.clip(noisy_image, 0, 1)
+    # Choisir la méthode de segmentation
+    method = st.selectbox("Choisissez une méthode de segmentation", 
+                          ["MeanShift", "KMeans", "Add Noise", "seuillage_Otsu", "Seuillage_Threshold"])
 
-def apply_filters(image, noise_type="gaussian"):
-    noisy_image = add_noise(image, noise_type)
-    
-    noisy_image_float = noisy_image.astype(np.float32)
+    # Télécharger une image
+    uploaded_file = st.file_uploader("Choisissez une image...", type=["jpg", "jpeg", "png"])
 
-    avg_filtered = cv2.blur(noisy_image_float, (5, 5))
-    gaussian_filtered = cv2.GaussianBlur(noisy_image_float, (5, 5), 0)
-    sigma_est = np.mean(estimate_sigma(noisy_image))
-    nl_means_filtered = denoise_nl_means(noisy_image, h=1.15 * sigma_est, fast_mode=True, patch_size=5, patch_distance=6)
+    if uploaded_file is not None:
+        # Enregistrer l'image téléchargée dans un dossier temporaire
+        image_path = os.path.join("temp", uploaded_file.name)
+        with open(image_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        
+        # Afficher l'image chargée
+        st.image(uploaded_file, caption='Image Chargée', use_column_width=True)
+        n_clusters = None
+        threshold_value = None
 
-    return noisy_image, avg_filtered, gaussian_filtered, nl_means_filtered
 
-# Wrapper function for segmentation and denoising
-def segment_and_denoise(image, method, noise_type):
-    segmented_image = None
-    if method == "MeanShift":
-        segmented_image = meanshift_segmentation(image)
-    elif method == "KMeans":
-        segmented_image = kmeans_segmentation(image)
 
-    # Denoising
-    noisy_image, avg_filtered, gaussian_filtered, nl_means_filtered = apply_filters(image, noise_type)
 
-    return segmented_image, noisy_image, avg_filtered, gaussian_filtered, nl_means_filtered
 
-# Gradio interface
-interface = gr.Interface(
-    fn=segment_and_denoise,
-    inputs=[
-        gr.Image(type="numpy", label="Upload an Image"),  # Image input
-        gr.Radio(choices=["MeanShift", "KMeans"], label="Segmentation Method"),  # Segmentation method selection
-        gr.Radio(choices=["gaussian", "salt_and_pepper"], label="Noise Type")  # Noise type selection
-    ],
-    outputs=[
-        gr.Image(type="numpy", label="Segmented Image"),  # Output segmented image
-        gr.Image(type="numpy", label="Noisy Image"),  # Output noisy image
-        gr.Image(type="numpy", label="Averaging Filter"),  # Output averaging filter image
-        gr.Image(type="numpy", label="Gaussian Filter"),  # Output Gaussian filter image
-        gr.Image(type="numpy", label="NLMeans Filter")  # Output NLMeans filter image
-    ],
-    title="Image Segmentation and Denoising App",
-    description="Upload an image, choose a segmentation method and a noise type to apply filters and segment the image."
-)
+        # Appliquer la méthode de segmentation choisie
+        if method == "MeanShift":
+            st.write("Application de la méthode MeanShift...")
+            segmented_image = meanshift_segmentation(image_path)
+            # Convertir l'image en RGB si nécessaire
+            if isinstance(segmented_image, np.ndarray):
+                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2RGB)
+        elif method == "KMeans":
+            n_clusters = st.slider("Choisissez le nombre de clusters", min_value=2, max_value=10, value=3)
+            st.write(f"Nombre de clusters choisi : {n_clusters}")
+            st.write("Application de la méthode KMeans...")
+            segmented_image = kmeans_segmentation(image_path,n_clusters=n_clusters)
+            if isinstance(segmented_image, np.ndarray):
+                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2RGB)
+        elif method == "Add Noise":
+            st.write("Ajout de bruit à l'image...")
+            segmented_image = add_noise(image_path)
+            if isinstance(segmented_image, np.ndarray):
+                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2RGB)
+        elif method == "Seuillage_Otsu":
+            st.write("Application de la méthode Otsu...")
+            segmented_image = otsu_segmentation(image_path)
+            # Assurez-vous que l'image est en niveaux de gris
+            if len(segmented_image.shape) == 3:
+                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2GRAY)
+        elif method == "Seuillage_Threshold":
+            threshold_value = st.slider("Choisissez une valeur de seuil", min_value=0, max_value=255, value=150)
+            st.write(f"Valeur de seuil choisie : {threshold_value}")
+            st.write("Application de la méthode Threshold...")
+            segmented_image = threshold_segmentation(image_path,threshold_value=threshold_value)
+            if len(segmented_image.shape) == 3:
+                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2GRAY)
+        
 
-# Launch the app
-interface.launch(share=True)
+        # Convertir l'image segmentée à un format affichable par Streamlit
+        if segmented_image is not None:
+            if len(segmented_image.shape) == 2:  # Image en niveaux de gris
+                # Convertir l'image numpy en image PIL
+                pil_image = Image.fromarray(segmented_image, mode='L')  # mode='L' pour niveaux de gris
+            else:  # Image en couleur
+                # Convertir l'image numpy en image PIL
+                pil_image = Image.fromarray(segmented_image)
+                pil_image = pil_image.convert('RGB')  # Assurez-vous que l'image est en RGB
+
+            # Afficher l'image segmentée
+            st.image(pil_image, caption='Image Segmentée', use_column_width=True)
+
+if __name__ == "__main__":
+    main()
