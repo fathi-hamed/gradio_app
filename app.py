@@ -38,9 +38,11 @@ def main():
         if method == "MeanShift":
             st.write("Application de la méthode MeanShift...")
             segmented_image = meanshift_segmentation(image_path)
-            # Convertir l'image en RGB si nécessaire
+    
+    # Vérifier si c'est un tableau NumPy, aucune conversion RGB n'est nécessaire
             if isinstance(segmented_image, np.ndarray):
-                segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2RGB)
+        # Affichage directement de l'image segmentée
+                    st.image(segmented_image, caption="Image segmentée", use_column_width=True)
         elif method == "KMeans":
             n_clusters = st.slider("Choisissez le nombre de clusters", min_value=2, max_value=10, value=3)
             st.write(f"Nombre de clusters choisi : {n_clusters}")
