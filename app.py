@@ -10,7 +10,7 @@ if not os.path.exists("temp"):
     os.makedirs("temp")
 
 def main():
-    st.title("Application de Segmentation d'Image 🖼️")
+    st.title("🖼️ Application de Segmentation d'Image ")
 
     # Choisir la méthode de segmentation
     method = st.selectbox("Choisissez une méthode de segmentation", 
