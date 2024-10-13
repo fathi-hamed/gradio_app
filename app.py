@@ -54,7 +54,7 @@
 # )
 
 # # Launch the app
-# interface.launch()
+# interface.launch(share=True)
 
 
 
