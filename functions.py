@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from PIL import Image
 
 def meanshift_segmentation(image_path):
     # Convertir l'image en RGB
@@ -101,82 +102,70 @@ def threshold_segmentation(image_path, threshold_value=150):
     _, thresh_image = cv2.threshold(gray_image, threshold_value, 255, cv2.THRESH_BINARY)
     return (thresh_image)
 
-def build_unet_model(input_shape):
-    inputs = Input(input_shape)
-
-    # Partie de contraction
-    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
-    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv1)
-    pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
-
-    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool1)
-    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv2)
-    pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
-
-    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool2)
-    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv3)
-    pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
-
-    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool3)
-    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv4)
-    pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
-
-    conv5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(pool4)
-    conv5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(conv5)
-
-    # Partie de l'expansion
-    up6 = UpSampling2D(size=(2, 2))(conv5)
-    merge6 = concatenate([up6, conv4])
-    conv6 = Conv2D(512, (3, 3), activation='relu', padding='same')(merge6)
-    conv6 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv6)
-
-    up7 = UpSampling2D(size=(2, 2))(conv6)
-    merge7 = concatenate([up7, conv3])
-    conv7 = Conv2D(256, (3, 3), activation='relu', padding='same')(merge7)
-    conv7 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv7)
-
-    up8 = UpSampling2D(size=(2, 2))(conv7)
-    merge8 = concatenate([up8, conv2])
-    conv8 = Conv2D(128, (3, 3), activation='relu', padding='same')(merge8)
-    conv8 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv8)
-
-    up9 = UpSampling2D(size=(2, 2))(conv8)
-    merge9 = concatenate([up9, conv1])
-    conv9 = Conv2D(64, (3, 3), activation='relu', padding='same')(merge9)
-    conv9 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv9)
-
-    outputs = Conv2D(1, (1, 1), activation='sigmoid')(conv9)
-
-    model = Model(inputs=[inputs], outputs=[outputs])
-    return model
-
 def unet(image_path):
-    try:
-        img = load_img(image_path, target_size=(256, 256))  # Redimensionner
-        img_array = img_to_array(img) / 255.0  # Normaliser
-        img_array = np.expand_dims(img_array, axis=0)  # Ajouter une dimension pour le lot
+    # Fonction pour construire le modèle U-Net
+    def build_unet_model(input_shape):
+        inputs = Input(input_shape)
 
-        # Créer et compiler le modèle U-Net
-        model = build_unet_model(input_shape=(256, 256, 3))
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        # Partie contractante (encodeur)
+        conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
+        conv1 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv1)
+        pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
 
-        # Charger les poids si disponibles
-        # model.load_weights('path_to_your_weights.h5')
+        conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(pool1)
+        conv2 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv2)
+        pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
 
-        # Prédire la segmentation
-        predicted_mask = model.predict(img_array)[0, :, :, 0]  # Récupérer la première image
+        conv3 = Conv2D(256, (3, 3), activation='relu', padding='same')(pool2)
+        conv3 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv3)
+        pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
 
-        # Afficher la sortie brute
-        plt.imshow(predicted_mask, cmap='gray')
-        plt.title("Sortie brute du modèle")
-        plt.axis('off')
-        plt.show()
+        conv4 = Conv2D(512, (3, 3), activation='relu', padding='same')(pool3)
+        conv4 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv4)
+        pool4 = MaxPooling2D(pool_size=(2, 2))(conv4)
 
-        # Appliquer un seuil pour obtenir une image binaire
-        binary_mask = (predicted_mask > 0.5).astype(np.uint8)
+        # Partie du "goulot"
+        conv5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(pool4)
+        conv5 = Conv2D(1024, (3, 3), activation='relu', padding='same')(conv5)
 
-        return binary_mask
+        # Partie expansive (décodeur)
+        up6 = UpSampling2D(size=(2, 2))(conv5)
+        merge6 = concatenate([up6, conv4], axis=3)
+        conv6 = Conv2D(512, (3, 3), activation='relu', padding='same')(merge6)
+        conv6 = Conv2D(512, (3, 3), activation='relu', padding='same')(conv6)
 
-    except Exception as e:
-        print(f"Erreur lors du traitement de l'image : {e}")
-        return None
+        up7 = UpSampling2D(size=(2, 2))(conv6)
+        merge7 = concatenate([up7, conv3], axis=3)
+        conv7 = Conv2D(256, (3, 3), activation='relu', padding='same')(merge7)
+        conv7 = Conv2D(256, (3, 3), activation='relu', padding='same')(conv7)
+
+        up8 = UpSampling2D(size=(2, 2))(conv7)
+        merge8 = concatenate([up8, conv2], axis=3)
+        conv8 = Conv2D(128, (3, 3), activation='relu', padding='same')(merge8)
+        conv8 = Conv2D(128, (3, 3), activation='relu', padding='same')(conv8)
+
+        up9 = UpSampling2D(size=(2, 2))(conv8)
+        merge9 = concatenate([up9, conv1], axis=3)
+        conv9 = Conv2D(64, (3, 3), activation='relu', padding='same')(merge9)
+        conv9 = Conv2D(64, (3, 3), activation='relu', padding='same')(conv9)
+
+        outputs = Conv2D(1, (1, 1), activation='sigmoid')(conv9)
+
+        model = Model(inputs, outputs)
+        return model
+
+    # Charger l'image depuis le chemin et la prétraiter
+    img = load_img(image_path, target_size=(256, 256))  # Redimensionner si nécessaire
+    img_array = img_to_array(img) / 255.0  # Normaliser l'image
+    img_array = np.expand_dims(img_array, axis=0)  # Ajouter une dimension pour le lot
+
+    # Créer et compiler le modèle U-Net
+    model = build_unet_model(input_shape=(256, 256, 3))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+    # Prédire la segmentation
+    predicted_mask = model.predict(img_array)[0, :, :, 0]  # Récupérer la première image du lot
+
+    # Retourner le masque prédit
+    return predicted_mask
+
