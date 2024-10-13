@@ -21,7 +21,7 @@ def meanshift_segmentation(image_path):
     
     # Appliquer la segmentation par Mean Shift
     mean_shift = cv2.pyrMeanShiftFiltering(image_filtered, sp=21, sr=51)
-    return(mean_shift)
+    return mean_shift
 
 
 
@@ -81,7 +81,7 @@ def add_noise(image_path, noise_type="gaussian"):
 
     # Reconversion de l'image en uint8 pour affichage
     noisy_image = (noisy_image * 255).astype(np.uint8)
-    return(noisy_image)
+    return noisy_image
 
 def otsu_segmentation(image_path):
     # Convertir l'image en niveaux de gris
@@ -91,7 +91,7 @@ def otsu_segmentation(image_path):
 
     # Appliquer le seuillage d'Otsu
     _, thresh_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return (thresh_image)
+    return thresh_image
 
 def threshold_segmentation(image_path, threshold_value=150):
     image=cv2.imread(image_path)
@@ -100,7 +100,7 @@ def threshold_segmentation(image_path, threshold_value=150):
 
     # Appliquer le seuillage fixe
     _, thresh_image = cv2.threshold(gray_image, threshold_value, 255, cv2.THRESH_BINARY)
-    return (thresh_image)
+    return thresh_image
 
 def unet(image_path):
     # Fonction pour construire le modèle U-Net
