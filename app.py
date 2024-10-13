@@ -14,7 +14,7 @@ def main():
 
     # Choisir la méthode de segmentation
     method = st.selectbox("Choisissez une méthode de segmentation", 
-                          ["MeanShift", "KMeans", "Add Noise", "seuillage_Otsu", "Seuillage_Threshold"])
+                          ["MeanShift", "KMeans", "Add Noise", "Seuillage_Otsu", "Seuillage_Threshold"])
 
     # Télécharger une image
     uploaded_file = st.file_uploader("Choisissez une image...", type=["jpg", "jpeg", "png"])
